@@ -24,6 +24,8 @@ class Ui_MainWindow(object):
     filePath = None
 
     def setupUi(self, MainWindow):
+
+        #主窗口
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(1200, 800)
         self.centralwidget = QtWidgets.QWidget(MainWindow)
@@ -38,6 +40,8 @@ class Ui_MainWindow(object):
         self.label = QtWidgets.QLabel(self.controlPanel)
         self.label.setObjectName("label")
         self.verticalLayout.addWidget(self.label)
+
+        #模型选择的下拉菜单属性设置
         self.modelCombo = QtWidgets.QComboBox(self.controlPanel)
         self.modelCombo.setObjectName("modelCombo")
         self.modelCombo.addItem("")
@@ -46,29 +50,41 @@ class Ui_MainWindow(object):
         self.modelCombo.addItem("")
         self.modelCombo.addItem("")
         self.verticalLayout.addWidget(self.modelCombo)
+
+        #模型加载按钮属性设置
         self.loadModelBtn = QtWidgets.QPushButton(self.controlPanel)
         self.loadModelBtn.setObjectName("loadModelBtn")
         self.verticalLayout.addWidget(self.loadModelBtn)
         spacerItem = QtWidgets.QSpacerItem(20, 20, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem)
+
+        #标签
         self.label_2 = QtWidgets.QLabel(self.controlPanel)
         self.label_2.setObjectName("label_2")
         self.verticalLayout.addWidget(self.label_2)
+
+        #文件类型选择的下拉菜单属性设置
         self.inputCombo = QtWidgets.QComboBox(self.controlPanel)
         self.inputCombo.setObjectName("inputCombo")
         self.inputCombo.addItem("")
         self.inputCombo.addItem("")
         self.inputCombo.addItem("")
         self.verticalLayout.addWidget(self.inputCombo)
+
+        #选择文件按钮属性设置
         self.fileBtn = QtWidgets.QPushButton(self.controlPanel)
         self.fileBtn.setEnabled(False)
         self.fileBtn.setObjectName("fileBtn")
         self.verticalLayout.addWidget(self.fileBtn)
         spacerItem1 = QtWidgets.QSpacerItem(20, 20, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem1)
+
+        #标签
         self.label_3 = QtWidgets.QLabel(self.controlPanel)
         self.label_3.setObjectName("label_3")
         self.verticalLayout.addWidget(self.label_3)
+
+        #置信度选择滑动块
         self.confSlider = QtWidgets.QSlider(self.controlPanel)
         self.confSlider.setOrientation(QtCore.Qt.Horizontal)
         self.confSlider.setMinimum(1)
@@ -76,33 +92,44 @@ class Ui_MainWindow(object):
         self.confSlider.setProperty("value", 50)
         self.confSlider.setObjectName("confSlider")
         self.verticalLayout.addWidget(self.confSlider)
+
+        #置信度手动输入框
         self.confSpin = QtWidgets.QSpinBox(self.controlPanel)
         self.confSpin.setMinimum(1)
         self.confSpin.setMaximum(99)
         self.confSpin.setProperty("value", 50)
         self.confSpin.setObjectName("confSpin")
         self.verticalLayout.addWidget(self.confSpin)
+
         spacerItem2 = QtWidgets.QSpacerItem(20, 20, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem2)
+
+        #检测按钮
         self.detectBtn = QtWidgets.QPushButton(self.controlPanel)
         self.detectBtn.setEnabled(False)
         self.detectBtn.setObjectName("detectBtn")
         self.verticalLayout.addWidget(self.detectBtn)
+
         spacerItem3 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem3)
         self.horizontalLayout.addWidget(self.controlPanel)
         self.tabWidget = QtWidgets.QTabWidget(self.centralwidget)
         self.tabWidget.setObjectName("tabWidget")
+
         self.videoTab = QtWidgets.QWidget()
         self.videoTab.setObjectName("videoTab")
         self.verticalLayout_2 = QtWidgets.QVBoxLayout(self.videoTab)
         self.verticalLayout_2.setObjectName("verticalLayout_2")
+
+        #检测结果展示标签
         self.videoLabel = QtWidgets.QLabel(self.videoTab)
         self.videoLabel.setStyleSheet("background-color: black;")
         self.videoLabel.setAlignment(QtCore.Qt.AlignCenter)
         self.videoLabel.setObjectName("videoLabel")
         self.verticalLayout_2.addWidget(self.videoLabel)
         self.tabWidget.addTab(self.videoTab, "")
+
+        #性能指标标签
         self.metricsTab = QtWidgets.QWidget()
         self.metricsTab.setObjectName("metricsTab")
         self.verticalLayout_3 = QtWidgets.QVBoxLayout(self.metricsTab)
@@ -114,20 +141,24 @@ class Ui_MainWindow(object):
         self.tabWidget.addTab(self.metricsTab, "")
         self.horizontalLayout.addWidget(self.tabWidget)
         MainWindow.setCentralWidget(self.centralwidget)
+
+        #最左下方的状态栏
         self.statusbar = QtWidgets.QStatusBar(MainWindow)
         self.statusbar.setObjectName("statusbar")
-
-        #链接按钮信号
-        self.loadModelBtn.clicked.connect(self.load_model)
-        self.fileBtn.clicked.connect(self.select_file)
         MainWindow.setStatusBar(self.statusbar)
-
         self.retranslateUi(MainWindow)
         self.tabWidget.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
+        #链接按钮信号
+        self.loadModelBtn.clicked.connect(self.load_model)
+        self.fileBtn.clicked.connect(self.select_file)
+
     def retranslateUi(self, MainWindow):
+
         _translate = QtCore.QCoreApplication.translate
+
+        #填充组件文本
         MainWindow.setWindowTitle(_translate("MainWindow", "YOLOv8 目标检测系统"))
         self.label.setText(_translate("MainWindow", "<b>模型选择</b>"))
         self.modelCombo.setItemText(0, _translate("MainWindow", "yolov8n"))
@@ -151,11 +182,13 @@ class Ui_MainWindow(object):
     def load_model(self):
         """加载YOLO模型"""
         try:
+
             model_name = self.modelCombo.currentText() + ".pt"
             self.model = YOLO(model_name)
             self.statusbar.showMessage(f"模型加载成功: {model_name}")
             self.detectBtn.setEnabled(True)
             self.fileBtn.setEnabled(True)
+
         except Exception as e:
             self.statusbar.showMessage(f"错误: {str(e)}")
             self.model = None
