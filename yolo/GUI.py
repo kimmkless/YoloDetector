@@ -38,7 +38,7 @@ class Ui_MainWindow(object):
         self.verticalLayout = QtWidgets.QVBoxLayout(self.controlPanel)
         self.verticalLayout.setObjectName("verticalLayout")
         self.label = QtWidgets.QLabel(self.controlPanel)
-        self.label.setObjectName("label")
+        self.label.setObjectName("labels")
         self.verticalLayout.addWidget(self.label)
 
         #模型选择的下拉菜单属性设置
