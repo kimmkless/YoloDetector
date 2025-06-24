@@ -1,27 +1,15 @@
-from ultralytics import YOLO
-import sys,os,PyQt5
-from PyQt5.QtWidgets import QMainWindow, QApplication
-from GUI import Ui_MainWindow  # 导入生成的界面类
-dirname = os.path.dirname(PyQt5.__file__)
-qt_dir = os.path.join(dirname, 'Qt5', 'plugins', 'platforms')
-os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = qt_dir
-class MainWindow(QMainWindow):
+import sys
+from PyQt5 import QtWidgets
+from PyQt5.QtWidgets import QMainWindow
+from GUI import Ui_MainWindow  # 确保 gui.py 文件与 main.py 在同一目录
+
+class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
-        super().__init__()
-
-        # 初始化UI
-        self.ui = Ui_MainWindow()
-        self.ui.setupUi(self)  # 自动创建所有界面元素
-
-        # 访问UI中的控件
-        self.ui.detectBtn.clicked.connect(self.start_detection)
-
-    def start_detection(self):
-        print("检测按钮被点击")
-
+        super(MainWindow, self).__init__()
+        self.setupUi(self)  # 初始化 UI 界面
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
+    app = QtWidgets.QApplication(sys.argv)
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
