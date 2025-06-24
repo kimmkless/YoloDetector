@@ -1,0 +1,9 @@
+# dataset.yaml
+path: ../TestSets
+train: images/train
+val: images/val
+nc: 4
+names:
+  0: person
+  1: car
+  2: traffic_light
