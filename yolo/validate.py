@@ -1,8 +1,13 @@
-# 导入ultralytics的YOLO库
 from ultralytics import YOLO
+from pylab import mpl
+
+# 设置显示中文字体
+mpl.rcParams["font.sans-serif"] = ["SimHei"]
+# 设置正常显示符号
+mpl.rcParams["axes.unicode_minus"] = False
 
 # 加载模型
-model = YOLO('../FaceExpressionDetector.pt')  # 加载自定义的训练模型
+model = YOLO('../Models/PlantsDetector.pt')  # 加载自定义的训练模型
 
 if __name__ == '__main__':
     # 对模型进行验证
