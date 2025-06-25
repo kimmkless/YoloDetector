@@ -32,9 +32,9 @@ model = YOLO('yolov8n.pt')
 #model("liuwei.gif",show=True,save=True)
 # 训练配置
 results = model.train(
-    data='CarDetectorData.yaml',  # 数据集配置文件
+    data='FaceExpressionData.yaml',  # 数据集配置文件
     workers=0,
-    epochs=100,           # 训练轮次
+    epochs=5,           # 训练轮次
     batch=32,             # 每轮批量
     imgsz=640,            # 图片尺寸
     lr0=0.01,             # 学习率

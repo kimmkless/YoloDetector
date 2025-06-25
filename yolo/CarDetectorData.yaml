@@ -1,4 +1,4 @@
-path: ../DataSet
+path: ../CarDetectDataSets
 train: train/images
 val: valid/images
 test: test/images

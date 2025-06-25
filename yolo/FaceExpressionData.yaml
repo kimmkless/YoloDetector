@@ -1,4 +1,4 @@
-path: ../TestSets
+path: ../FaceExpressionDataSets
 train: ../images/train
 val: ../images/val
 test: ../images/test
