@@ -1,0 +1,6 @@
+path: ../TestSets
+train: ../images/train
+val: ../images/val
+test: ../images/test
+nc: 9
+names: ['angry', 'contempt', 'disgust', 'fear', 'happy', 'natural', 'sad', 'sleepy', 'surprised']
