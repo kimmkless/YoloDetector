@@ -101,6 +101,9 @@ class Ui_MainWindow(object):
         self.confSpin.setObjectName("confSpin")
         self.verticalLayout.addWidget(self.confSpin)
 
+        self.confSlider.valueChanged.connect(self.confSpin.setValue)
+        self.confSpin.valueChanged.connect(self.confSlider.setValue)
+
         spacerItem2 = QtWidgets.QSpacerItem(20, 20, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem2)
 
@@ -109,6 +112,7 @@ class Ui_MainWindow(object):
         self.detectBtn.setEnabled(False)
         self.detectBtn.setObjectName("detectBtn")
         self.verticalLayout.addWidget(self.detectBtn)
+        self.detectBtn.clicked.connect(self.run_detection)
 
         spacerItem3 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem3)
@@ -168,7 +172,7 @@ class Ui_MainWindow(object):
         self.modelCombo.setItemText(4, _translate("MainWindow", "yolov8x"))
         self.loadModelBtn.setText(_translate("MainWindow", "加载模型"))
         self.label_2.setText(_translate("MainWindow", "<b>输入源</b>"))
-        self.inputCombo.setItemText(0, _translate("MainWindow", "摄像头"))
+        # self.inputCombo.setItemText(0, _translate("MainWindow", "摄像头"))
         self.inputCombo.setItemText(1, _translate("MainWindow", "图片"))
         self.inputCombo.setItemText(2, _translate("MainWindow", "视频"))
         self.fileBtn.setText(_translate("MainWindow", "选择文件"))
@@ -186,7 +190,6 @@ class Ui_MainWindow(object):
             model_name = self.modelCombo.currentText() + ".pt"
             self.model = YOLO(model_name)
             self.statusbar.showMessage(f"模型加载成功: {model_name}")
-            self.detectBtn.setEnabled(True)
             self.fileBtn.setEnabled(True)
 
         except Exception as e:
@@ -217,6 +220,7 @@ class Ui_MainWindow(object):
                         self.file_path = file
                         self.display_image(frame)
                         self.statusbar.showMessage(f"已加载图片: {os.path.basename(file)}")
+                        self.detectBtn.setEnabled(True)
 
             elif input_type == "视频":
                 file, _ = QFileDialog.getOpenFileName(
@@ -227,10 +231,22 @@ class Ui_MainWindow(object):
                 if file:
                     self.filePath = file
                     self.statusbar.showMessage(f"已选择视频: {os.path.basename(file)}")
+                    self.detectBtn.setEnabled(True)
+
+                    cap = cv2.VideoCapture(file)
+                    ret, frame = cap.read()
+                    cap.release()
+
+                    if not ret or frame is None:
+                        QMessageBox.critical(self, "错误", "无法读取视频第一帧！")
+                    else:
+                        self.display_image(frame)
+                        self.statusbar.showMessage(f"已加载视频第一帧: {os.path.basename(file)}")
 
         except Exception as e:
             QMessageBox.critical(self, "致命错误", f"文件选择失败: {str(e)}")
             print(f"DEBUG: 错误详情 - {traceback.format_exc()}")  # 打印完整错误栈
+
     def display_image(self, cv_img):
         """显示OpenCV图像"""
         try:
@@ -242,3 +258,54 @@ class Ui_MainWindow(object):
                 self.videoLabel.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
         except Exception as e:
             self.statusbar.showMessage(f"显示错误: {str(e)}")
+
+    def run_detection(self):
+        try:
+            if self.model is None:
+                QMessageBox.warning(None, "模型未加载", "请先加载模型！")
+                return
+
+            input_type = self.inputCombo.currentText()
+
+            # 从滑动条或 spinbox 获取置信度阈值
+            conf_threshold = self.confSlider.value() / 100.0
+
+            if input_type == "图片":
+                if not self.file_path:
+                    QMessageBox.warning(None, "未选择文件", "请选择图片文件！")
+                    return
+
+                results = self.model(self.file_path, conf=conf_threshold)[0]  # 推理
+                result_img = results.plot()  # 可视化预测框到图像
+                self.display_image(result_img)
+                self.statusbar.showMessage("图片检测完成")
+
+            elif input_type == "视频":
+                if not self.filePath:
+                    QMessageBox.warning(None, "未选择视频", "请选择视频文件！")
+                    return
+
+                # 初始化视频读取与保存
+                cap = cv2.VideoCapture(self.filePath)
+                if not cap.isOpened():
+                    QMessageBox.critical(None, "错误", "无法打开视频文件！")
+                    return
+
+                self.statusbar.showMessage("开始处理视频...")
+
+                while True:
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+
+                    results = self.model(frame, conf=conf_threshold)[0]
+                    result_frame = results.plot()
+
+                    self.display_image(result_frame)
+                    cv2.waitKey(1)  # 控制播放速度（可调）
+
+                cap.release()
+                self.statusbar.showMessage("视频检测完成")
+
+        except Exception as e:
+            QMessageBox.critical(None, "检测失败", str(e))
