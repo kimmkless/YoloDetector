@@ -18,7 +18,7 @@
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>0</number>
+       <number>2</number>
       </property>
       <widget class="QWidget" name="tabDataset">
        <attribute name="title">
@@ -207,7 +207,7 @@
               <number>1000</number>
              </property>
              <property name="value">
-              <number>100</number>
+              <number>10</number>
              </property>
             </widget>
            </item>
@@ -227,7 +227,7 @@
               <number>64</number>
              </property>
              <property name="value">
-              <number>16</number>
+              <number>32</number>
              </property>
             </widget>
            </item>
@@ -263,16 +263,6 @@
            <string>数据增强</string>
           </property>
           <layout class="QGridLayout" name="gridLayout_2">
-           <item row="0" column="0">
-            <widget class="QCheckBox" name="checkFlip">
-             <property name="text">
-              <string>随机水平翻转</string>
-             </property>
-             <property name="checked">
-              <bool>true</bool>
-             </property>
-            </widget>
-           </item>
            <item row="0" column="1">
             <widget class="QCheckBox" name="checkBlur">
              <property name="text">
@@ -280,10 +270,30 @@
              </property>
             </widget>
            </item>
-           <item row="1" column="0">
+           <item row="2" column="0">
             <widget class="QCheckBox" name="checkNoise">
              <property name="text">
               <string>随机噪声</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="0">
+            <widget class="QCheckBox" name="checkFlip">
+             <property name="text">
+              <string>随机水平翻转</string>
+             </property>
+             <property name="checked">
+              <bool>false</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QCheckBox" name="checkUseGPU">
+             <property name="text">
+              <string>GPU加速</string>
+             </property>
+             <property name="checked">
+              <bool>true</bool>
              </property>
             </widget>
            </item>
@@ -341,6 +351,13 @@ QPushButton:pressed {
             </widget>
            </item>
            <item>
+            <widget class="QPushButton" name="btnStopTraining">
+             <property name="text">
+              <string>停止训练</string>
+             </property>
+            </widget>
+           </item>
+           <item>
             <widget class="QLabel" name="labelProgress">
              <property name="text">
               <string>准备训练...</string>
@@ -360,9 +377,42 @@ QPushButton:pressed {
           </property>
           <layout class="QVBoxLayout" name="verticalLayout_8">
            <item>
-            <widget class="QCustomPlot" name="customPlot" native="true">
-             <property name="styleSheet">
-              <string notr="true">background-color: white;</string>
+            <widget class="QComboBox" name="plotSelect">
+             <item>
+              <property name="text">
+               <string>Loss 曲线</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>mAP 曲线</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Precision 曲线</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Recall 曲线</string>
+              </property>
+             </item>
+            </widget>
+           </item>
+           <item>
+            <widget class="QWidget" name="plotWidget" native="true">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>100</width>
+               <height>100</height>
+              </size>
              </property>
             </widget>
            </item>
@@ -374,9 +424,15 @@ QPushButton:pressed {
           <property name="title">
            <string>训练日志</string>
           </property>
-          <layout class="QVBoxLayout" name="verticalLayout_9">
+          <layout class="QHBoxLayout" name="horizontalLayout_4">
            <item>
             <widget class="QTextEdit" name="textEditLog">
+             <property name="minimumSize">
+              <size>
+               <width>1</width>
+               <height>0</height>
+              </size>
+             </property>
              <property name="readOnly">
               <bool>true</bool>
              </property>
@@ -441,13 +497,6 @@ QPushButton:pressed {
    </property>
   </action>
  </widget>
- <customwidgets>
-  <customwidget>
-   <class>QCustomPlot</class>
-   <extends>QWidget</extends>
-   <header>qcustomplot.h</header>
-  </customwidget>
- </customwidgets>
  <resources/>
  <connections/>
 </ui>
