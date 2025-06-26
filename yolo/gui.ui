@@ -138,6 +138,9 @@
        </item>
        <item>
         <widget class="QSlider" name="confSlider">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
          <property name="minimum">
           <number>1</number>
          </property>
@@ -146,9 +149,6 @@
          </property>
          <property name="value">
           <number>50</number>
-         </property>
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
          </property>
         </widget>
        </item>
@@ -207,7 +207,7 @@
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="videoTab">
        <attribute name="title">
