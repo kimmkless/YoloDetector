@@ -1,39 +1,37 @@
 import sys
 import os
-import time
 import subprocess
 import threading
+import shutil
 import matplotlib.pyplot as plt
-from ReadLoss import read_loss_from_results_csv
-from ReadMetrics import read_metrics_from_results_csv
+
+from DataEnhanced import EnhancementThread
 from PyQt5 import QtWidgets, uic
-from PyQt5.QtWidgets import QFileDialog, QMessageBox, QPushButton
+from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import QTimer, Qt
 from PlotCanvas import PlotCanvas
+from ReadData import get_latest_results_csv,get_latest_model_dir,read_loss_from_results_csv,read_metrics_from_results_csv
 
 plt.rcParams['font.sans-serif'] = ['SimHei']
 plt.rcParams['axes.unicode_minus'] = False
 
-CURRENT_TIME = time.time()
 LOG_FILE = "train_output.log"
 SAVE_MODEL_DIR = "saved_models"
-
 
 class YoloTrainerApp(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
-        uic.loadUi("./Assets/UI/Train.ui", self)
+        uic.loadUi("Assets/UI/Train.ui", self)
 
         self.btnSelectDataset.clicked.connect(self.select_dataset_folder)
         self.btnUploadDataset.clicked.connect(self.upload_dataset)
-        self.btnStartTraining.clicked.connect(self.start_training)
+        self.btnStartTraining.clicked.connect(self.start_data_enhancement)
         self.plotSelect.currentIndexChanged.connect(self.update_selected_plot)
-
-        self.btnStopTraining = self.findChild(QPushButton, "btnStopTraining")
-        if self.btnStopTraining:
-            self.btnStopTraining.clicked.connect(self.stop_training)
-            self.btnStopTraining.setEnabled(False)
+        self.btnStopTraining.clicked.connect(self.stop_training)
+        self.btnStopTraining.setEnabled(False)
+        self.btnSaveModel.clicked.connect(self.save_model_manually)
+        self.btnSaveModel.setEnabled(False)
 
         self.dataset_path = ""
 
@@ -51,6 +49,7 @@ class YoloTrainerApp(QtWidgets.QMainWindow):
         self.log_timer.timeout.connect(self.read_log_file)
         self.last_log_position = 0
 
+        self.enhancement_thread = None
         self.yolo_process = None
         self.current_results_csv = None
 
@@ -71,7 +70,7 @@ class YoloTrainerApp(QtWidgets.QMainWindow):
 
     def update_selected_plot(self):
         index = self.plotSelect.currentIndex()
-        csv_path = self.current_results_csv or self.get_latest_results_csv()
+        csv_path = self.current_results_csv or get_latest_results_csv()
         if not csv_path or not os.path.exists(csv_path):
             self.log_text("无法找到 results.csv")
             return
@@ -156,6 +155,7 @@ class YoloTrainerApp(QtWidgets.QMainWindow):
 
         model_type = self.comboModelType.currentText()
         model_name = model_type.split("(")[-1].replace(")", "").strip()
+
         self.epochs = self.spinEpochs.value()
         self.batch_size = self.spinBatchSize.value()
         self.lr = self.spinLearningRate.value()
@@ -164,10 +164,9 @@ class YoloTrainerApp(QtWidgets.QMainWindow):
         self.log_text(f"模型: {model_name}")
         self.log_text(f"轮次: {self.epochs}，批大小: {self.batch_size}，学习率: {self.lr}")
         self.log_text(f"数据目录: {self.dataset_path}")
-        self.log_text("正在开始训练...\n")
 
+        self.log_text("正在开始训练...\n")
         self.set_progress(0, "正在初始化训练任务...")
-        self.progressBar.setValue(0)
 
         with open(LOG_FILE, 'w', encoding='utf-8') as f:
             f.write('')
@@ -184,9 +183,7 @@ class YoloTrainerApp(QtWidgets.QMainWindow):
             self.yolo_process.wait()
             self.log_text("用户中止了训练进程。")
             self.set_progress(0, "训练已中止")
-            self.btnStartTraining.setEnabled(True)
-            if self.btnStopTraining:
-                self.btnStopTraining.setEnabled(False)
+            self.delayed_reset_ui()
 
     def run_yolo_subprocess(self, model_name):
         data_yaml_path = os.path.join(self.dataset_path, 'data.yaml')
@@ -220,7 +217,7 @@ class YoloTrainerApp(QtWidgets.QMainWindow):
                 self.yolo_process.wait()
                 if self.yolo_process.returncode == 0:
                     self.set_progress(100, "训练完成")
-                    self.current_results_csv = self.get_latest_results_csv()
+                    self.current_results_csv = get_latest_results_csv()
                     self.handle_training_completion()
                     self.update_final_results()
                 else:
@@ -229,10 +226,29 @@ class YoloTrainerApp(QtWidgets.QMainWindow):
                 self.log_text(f"训练过程出错：{e}")
                 self.set_progress(0, "训练失败")
             finally:
-                self.btnStartTraining.setEnabled(True)
-                if self.btnStopTraining:
-                    self.btnStopTraining.setEnabled(False)
+                self.delayed_reset_ui()
                 self.log_timer.stop()
+
+    def on_enhancement_done(self):
+        self.log_text("数据增强完成，开始训练")
+        self.set_progress(0, "开始训练")
+        self.start_training()
+
+    def start_data_enhancement(self):
+        self.enhancement_thread = EnhancementThread(self.dataset_path, self.get_enhance_flags())
+        self.enhancement_thread.progress_signal.connect(self.set_progress)
+        self.enhancement_thread.log_signal.connect(self.log_text)
+        self.enhancement_thread.done_signal.connect(self.on_enhancement_done)
+        self.set_progress(0, "开始数据增强")
+        self.enhancement_thread.start()
+
+    def get_enhance_flags(self):
+        return {
+            'flip': self.checkFlip.isChecked(),
+            'blur': self.checkBlur.isChecked(),
+            'noise': self.checkNoise.isChecked(),
+            'rotate': self.checkRotation.isChecked()
+        }
 
     def read_log_file(self):
         if os.path.exists(LOG_FILE):
@@ -244,7 +260,7 @@ class YoloTrainerApp(QtWidgets.QMainWindow):
                 self.last_log_position = f.tell()
 
     def update_progress_from_csv(self):
-        csv_path = self.current_results_csv or self.get_latest_results_csv()
+        csv_path = self.current_results_csv or get_latest_results_csv()
         if not csv_path or not os.path.exists(csv_path):
             return
 
@@ -275,29 +291,8 @@ class YoloTrainerApp(QtWidgets.QMainWindow):
     def plot_metrics_from_csv(self):
         self.update_selected_plot()
 
-    # --- 训练完成提示和保存模型文件 ---
-    def prompt_user_save_model(self, parent_widget, model_dir):
-        reply = QMessageBox.question(
-            parent_widget,
-            "训练完成",
-            "模型训练已完成，是否要保存模型文件？",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        if reply == QMessageBox.Yes:
-            save_path = QFileDialog.getExistingDirectory(parent_widget, "选择保存模型的目录", SAVE_MODEL_DIR)
-            if save_path:
-                try:
-                    import shutil
-                    shutil.copytree(model_dir, os.path.join(save_path, os.path.basename(model_dir)), dirs_exist_ok=True)
-                    QMessageBox.information(parent_widget, "保存成功", f"模型已保存到：{save_path}")
-                except Exception as e:
-                    QMessageBox.warning(parent_widget, "保存失败", f"保存失败：{e}")
-            else:
-                QMessageBox.information(parent_widget, "提示", "未选择目录，未保存模型。")
-
     # --- 用户终止训练后延迟初始化 ---
     def delayed_reset_ui(self, delay_sec=2):
-        self.reset()
         QTimer.singleShot(delay_sec * 1000, self.reset)
 
     def reset(self):
@@ -306,39 +301,34 @@ class YoloTrainerApp(QtWidgets.QMainWindow):
         if self.btnStopTraining:
             self.btnStopTraining.setEnabled(False)
 
-    def get_latest_model_dir(self, base_dir='runs/train'):
-        latest_dir = None
-        latest_time = 0
-        for root, dirs, files in os.walk(base_dir):
-            for d in dirs:
-                full_path = os.path.join(root, d)
-                if os.path.isdir(full_path):
-                    mtime = os.path.getmtime(full_path)
-                    if mtime > latest_time:
-                        latest_time = mtime
-                        latest_dir = full_path
-        return latest_dir
-
     # --- 训练结束后自动提示保存模型 ---
     def handle_training_completion(self):
         self.set_progress(100, "训练完成")
         self.btnStartTraining.setEnabled(True)
         if self.btnStopTraining:
             self.btnStopTraining.setEnabled(False)
-        model_dir = self.get_latest_model_dir()
+
+        model_dir = get_latest_model_dir()
         if model_dir:
-            self.prompt_user_save_model(self, model_dir)
-    def get_latest_results_csv(self, base_dir='runs/train'):
-        latest_csv = None
-        latest_time = 0
-        for root, dirs, files in os.walk(base_dir):
-            if 'results.csv' in files:
-                path = os.path.join(root, 'results.csv')
-                mtime = os.path.getmtime(path)
-                if mtime > latest_time and mtime > CURRENT_TIME:
-                    latest_time = mtime
-                    latest_csv = path
-        return latest_csv
+            self.model_to_save = model_dir  # 保存路径待后续按钮点击处理
+            if self.btnSaveModel:
+                self.btnSaveModel.setEnabled(True)
+                self.log_text("训练已完成，可点击“保存模型”按钮保存训练结果。")
+
+    def save_model_manually(self):
+        if not hasattr(self, 'model_to_save') or not self.model_to_save:
+            QMessageBox.warning(self, "错误", "当前没有可保存的模型目录")
+            return
+
+        save_path = QFileDialog.getExistingDirectory(self, "选择保存模型的目录", SAVE_MODEL_DIR)
+        if save_path:
+            try:
+                shutil.copytree(self.model_to_save, os.path.join(save_path, os.path.basename(self.model_to_save)),
+                                dirs_exist_ok=True)
+                QMessageBox.information(self, "保存成功", f"训练结果已保存到：{save_path}")
+                self.btnSaveModel.setEnabled(False)
+            except Exception as e:
+                QMessageBox.warning(self, "保存失败", f"保存失败：{e}")
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
