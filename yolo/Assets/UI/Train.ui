@@ -18,7 +18,7 @@
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>2</number>
+       <number>1</number>
       </property>
       <widget class="QWidget" name="tabDataset">
        <attribute name="title">
@@ -78,8 +78,8 @@
                <rect>
                 <x>0</x>
                 <y>0</y>
-                <width>836</width>
-                <height>475</height>
+                <width>124</width>
+                <height>52</height>
                </rect>
               </property>
               <layout class="QGridLayout" name="gridLayout">
@@ -171,22 +171,7 @@
              </item>
              <item>
               <property name="text">
-               <string>YOLOv8 Small (yolov8s.pt)</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string>YOLOv8 Medium (yolov8m.pt)</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string>YOLOv8 Large (yolov8l.pt)</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string>YOLOv8 XLarge (yolov8x.pt)</string>
+               <string>YOLOv11 Nano (yolov11n.pt)</string>
               </property>
              </item>
             </widget>

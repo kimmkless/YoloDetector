@@ -28,7 +28,7 @@ if __name__ == "__main__":
     sys.exit(app.exec_())
 """
 # 加载预训练模型
-model = YOLO('yolov8n.pt')
+model = YOLO('Assets/Model/yolov8n.pt')
 #model("liuwei.gif",show=True,save=True)
 # 训练配置
 results = model.train(

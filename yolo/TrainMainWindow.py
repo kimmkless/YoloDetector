@@ -23,7 +23,7 @@ SAVE_MODEL_DIR = "saved_models"
 class YoloTrainerApp(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
-        uic.loadUi("Train.ui", self)
+        uic.loadUi("./Assets/UI/Train.ui", self)
 
         self.btnSelectDataset.clicked.connect(self.select_dataset_folder)
         self.btnUploadDataset.clicked.connect(self.upload_dataset)
@@ -267,8 +267,7 @@ class YoloTrainerApp(QtWidgets.QMainWindow):
                 self.plot_canvas.update_custom_curve(p_list, title="Precision 曲线", label="Precision", color='green')
             elif index == 3 and r_list:
                 self.plot_canvas.update_custom_curve(r_list, title="Recall 曲线", label="Recall", color='orange')
-            else:
-                self.plot_canvas.update_custom_curve(loss_list,title="Loss曲线", label="Loss", color='red')
+
     def update_final_results(self):
         self.plot_metrics_from_csv()
         self.plotSelect.setCurrentIndex(1)
