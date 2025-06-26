@@ -1,7 +1,9 @@
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt5.QtWidgets import QSizePolicy
-
+import matplotlib.pyplot as plt
+plt.rcParams['font.sans-serif'] = ['SimHei']
+plt.rcParams['axes.unicode_minus'] = False
 class PlotCanvas(FigureCanvas):
     def __init__(self, parent=None):
         self.fig = Figure()
@@ -35,5 +37,14 @@ class PlotCanvas(FigureCanvas):
         self.ax.set_title("mAP 指标曲线")
         self.ax.set_xlabel("Epoch")
         self.ax.set_ylabel("mAP 值")
+        self.ax.legend()
+        self.draw()
+
+    def update_custom_curve(self, values, title, label, color):
+        self.ax.clear()
+        self.ax.plot(values, label=label, color=color)
+        self.ax.set_title(title)
+        self.ax.set_xlabel("Epoch")
+        self.ax.set_ylabel(label)
         self.ax.legend()
         self.draw()

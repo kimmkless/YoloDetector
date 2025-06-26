@@ -18,7 +18,7 @@
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>0</number>
+       <number>2</number>
       </property>
       <widget class="QWidget" name="tabDataset">
        <attribute name="title">
@@ -351,6 +351,13 @@ QPushButton:pressed {
             </widget>
            </item>
            <item>
+            <widget class="QPushButton" name="btnStopTraining">
+             <property name="text">
+              <string>停止训练</string>
+             </property>
+            </widget>
+           </item>
+           <item>
             <widget class="QLabel" name="labelProgress">
              <property name="text">
               <string>准备训练...</string>
@@ -370,6 +377,30 @@ QPushButton:pressed {
           </property>
           <layout class="QVBoxLayout" name="verticalLayout_8">
            <item>
+            <widget class="QComboBox" name="plotSelect">
+             <item>
+              <property name="text">
+               <string>Loss 曲线</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>mAP 曲线</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Precision 曲线</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Recall 曲线</string>
+              </property>
+             </item>
+            </widget>
+           </item>
+           <item>
             <widget class="QWidget" name="plotWidget" native="true">
              <property name="sizePolicy">
               <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -380,7 +411,7 @@ QPushButton:pressed {
              <property name="minimumSize">
               <size>
                <width>100</width>
-               <height>10</height>
+               <height>100</height>
               </size>
              </property>
             </widget>
