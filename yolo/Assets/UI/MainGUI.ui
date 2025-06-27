@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="windowTitle">
+   <string>YOLO 主控制台</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <item>
+     <widget class="QPushButton" name="trainButton">
+      <property name="text">
+       <string>进入模型训练模块</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QPushButton" name="detectButton">
+      <property name="text">
+       <string>进入目标检测模块</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
