@@ -22,7 +22,7 @@ SAVE_MODEL_DIR = "saved_models"
 class YoloTrainerApp(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
-        uic.loadUi("Assets/UI/Train.ui", self)
+        uic.loadUi("Assets/UI/TrainGUI.ui", self)
 
         self.btnSelectDataset.clicked.connect(self.select_dataset_folder)
         self.btnUploadDataset.clicked.connect(self.upload_dataset)
@@ -142,16 +142,6 @@ class YoloTrainerApp(QtWidgets.QMainWindow):
         QMessageBox.information(self, "提示", f"成功上传数据集：{self.dataset_path}")
 
     def start_training(self):
-        self.btnStartTraining.setEnabled(False)
-        if self.btnStopTraining:
-            self.btnStopTraining.setEnabled(True)
-
-        if not self.dataset_path:
-            QMessageBox.warning(self, "错误", "请先选择数据集目录！")
-            self.btnStartTraining.setEnabled(True)
-            if self.btnStopTraining:
-                self.btnStopTraining.setEnabled(False)
-            return
 
         model_type = self.comboModelType.currentText()
         model_name = model_type.split("(")[-1].replace(")", "").strip()
@@ -172,10 +162,9 @@ class YoloTrainerApp(QtWidgets.QMainWindow):
             f.write('')
         self.last_log_position = 0
         self.log_timer.start(1000)
-
+        self.progress_timer.start(1000)
         thread = threading.Thread(target=self.run_yolo_subprocess, args=(model_name,))
         thread.start()
-        self.progress_timer.start(1000)
 
     def stop_training(self):
         if self.yolo_process and self.yolo_process.poll() is None:
@@ -217,6 +206,7 @@ class YoloTrainerApp(QtWidgets.QMainWindow):
                 self.yolo_process.wait()
                 if self.yolo_process.returncode == 0:
                     self.set_progress(100, "训练完成")
+                    self.progress_timer.stop()
                     self.current_results_csv = get_latest_results_csv()
                     self.handle_training_completion()
                     self.update_final_results()
@@ -228,13 +218,25 @@ class YoloTrainerApp(QtWidgets.QMainWindow):
             finally:
                 self.delayed_reset_ui()
                 self.log_timer.stop()
+                self.progress_timer.stop()
 
     def on_enhancement_done(self):
+        self.enhancement_thread.wait()
         self.log_text("数据增强完成，开始训练")
         self.set_progress(0, "开始训练")
         self.start_training()
 
     def start_data_enhancement(self):
+        self.btnStartTraining.setEnabled(False)
+        if self.btnStopTraining:
+            self.btnStopTraining.setEnabled(True)
+
+        if not self.dataset_path:
+            QMessageBox.warning(self, "错误", "请先选择数据集目录！")
+            self.btnStartTraining.setEnabled(True)
+            if self.btnStopTraining:
+                self.btnStopTraining.setEnabled(False)
+            return
         self.enhancement_thread = EnhancementThread(self.dataset_path, self.get_enhance_flags())
         self.enhancement_thread.progress_signal.connect(self.set_progress)
         self.enhancement_thread.log_signal.connect(self.log_text)
