@@ -1,6 +1,8 @@
 import os
 import cv2
 import PyQt5
+import tempfile
+import shutil
 from RunDetector import DetectionWorker
 from PyQt5 import uic, QtWidgets
 from PyQt5.QtWidgets import QMessageBox, QFileDialog, QDockWidget
@@ -23,8 +25,13 @@ class LogicMixin(QtWidgets.QMainWindow):
         self.filePath = None
         self.input_type = None
         self.worker = None
+        self.save_output_dir = None
         self.is_paused = False
-        self.detection_started = False  # 标志是否检测已经开始
+        self.detection_started = False
+        self.slider_is_dragging = False
+
+        self.videoProgressSlider.sliderPressed.connect(self.on_slider_pressed)
+        self.videoProgressSlider.sliderReleased.connect(self.slider_released)
 
         self.loadModelBtn_5.clicked.connect(self.load_model)
         self.detectBtn_5.clicked.connect(self.run_detection)
@@ -32,7 +39,12 @@ class LogicMixin(QtWidgets.QMainWindow):
         self.forwardBtn.clicked.connect(self.forward_video)
         self.backwardBtn.clicked.connect(self.backward_video)
         self.videoProgressSlider.sliderReleased.connect(self.slider_released)
+        self.saveResultBtn.clicked.connect(self.choose_save_directory)
+        self.modelCombo_5.currentTextChanged.connect(self.update_metric_display)
+        self.modelCombo_5.currentTextChanged.connect(self.update_metric_image)
+        self.comboBox_2.currentTextChanged.connect(self.update_metric_image)
 
+        self.saveResultBtn.setEnabled(False)
         self.detectBtn_5.setEnabled(False)
         self.stopBtn.setEnabled(True)  # 启动时就启用
 
@@ -54,10 +66,18 @@ class LogicMixin(QtWidgets.QMainWindow):
 
         self.delaySlider_5.setRange(0, 100)
         self.delaySlider_5.setValue(10)
-        self.delaySpinBox_5.setValue(0.1)
+        self.delaySpinBox_5.setValue(0.05)
         self.delaySlider_5.valueChanged.connect(lambda val: self.delaySpinBox_5.setValue(val / 100.0))
         self.delaySpinBox_5.valueChanged.connect(lambda val: self.delaySlider_5.setValue(int(val * 100)))
 
+        self.videoProgressSlider.hide()
+        self.stopBtn.hide()
+        self.forwardBtn.hide()
+        self.backwardBtn.hide()
+
+        self.create_dock_widget()
+
+    def create_dock_widget(self):
         # --- 找到 UI 中原有控件 ---
         self.settingWidget = self.findChild(QtWidgets.QWidget, "settingWidget")
         self.tabWidget = self.findChild(QtWidgets.QTabWidget, "tabWidget")
@@ -101,9 +121,6 @@ class LogicMixin(QtWidgets.QMainWindow):
         self.viewMenu.settingDockAction.triggered.connect(self.toggle_setting_dock)
         self.viewMenu.tabDockAction.triggered.connect(self.toggle_tab_dock)
 
-        self.modelCombo_5.currentTextChanged.connect(self.update_metric_display)
-
-
     def toggle_setting_dock(self):
         if self.settingDock.isVisible():
             self.settingDock.hide()
@@ -127,18 +144,29 @@ class LogicMixin(QtWidgets.QMainWindow):
             self.statusbar.showMessage(f"模型加载成功: {model_name}")
             self.update_metric_display(self.modelCombo_5.currentText())
 
-            self.modelCombo_5.currentTextChanged.connect(self.update_metric_image)
-            self.comboBox_2.currentTextChanged.connect(self.update_metric_image)
-
-
         except Exception as e:
             self.statusbar.showMessage(f"错误: {str(e)}")
             self.model = None
+    def choose_save_directory(self):
+        if not hasattr(self, 'temp_output_dir') or not os.path.exists(self.temp_output_dir):
+            QMessageBox.warning(self, "警告", "没有可保存的检测结果！")
+            return
+
+        directory = QFileDialog.getExistingDirectory(self, "选择保存目录")
+        if directory:
+            try:
+                # 复制临时目录中的内容到目标目录
+                shutil.copytree(self.temp_output_dir, directory, dirs_exist_ok=True)
+                self.statusbar.showMessage(f"检测结果已保存至：{directory}")
+            except Exception as e:
+                QMessageBox.critical(self, "保存失败", str(e))
+
 
     def select_file(self, input_type):
         try:
             self.input_type = input_type
             options = QFileDialog.Options()
+            self.stop_current_worker_if_running()
             if input_type == "图片":
                 file, _ = QFileDialog.getOpenFileName(self, "选择图片", "", "*.jpg *.jpeg *.png *.bmp")
                 if file and os.path.exists(file):
@@ -149,6 +177,10 @@ class LogicMixin(QtWidgets.QMainWindow):
                         self.detectBtn_5.setEnabled(True)
                         self.statusbar.showMessage(f"已加载图片: {os.path.basename(file)}")
                         self.display_image(frame)
+                        self.videoProgressSlider.hide()
+                        self.stopBtn.hide()
+                        self.forwardBtn.hide()
+                        self.backwardBtn.hide()
             elif input_type == "视频":
                 file, _ = QFileDialog.getOpenFileName(self, "选择视频", "", "*.mp4 *.avi *.mov *.mkv")
                 if file:
@@ -161,11 +193,19 @@ class LogicMixin(QtWidgets.QMainWindow):
                     if ret:
                         self.display_image(frame)
                         self.statusbar.showMessage(f"已加载视频: {os.path.basename(file)}")
+                        self.videoProgressSlider.show()
+                        self.stopBtn.show()
+                        self.forwardBtn.show()
+                        self.backwardBtn.show()
             elif input_type == "摄像头":
                 self.filePath = None
                 self.file_path = None
                 self.detectBtn_5.setEnabled(True)
                 self.statusbar.showMessage("准备使用摄像头")
+                self.videoProgressSlider.hide()
+                self.stopBtn.hide()
+                self.forwardBtn.hide()
+                self.backwardBtn.hide()
         except Exception as e:
             QMessageBox.critical(self, "文件选择失败", str(e))
 
@@ -207,7 +247,11 @@ class LogicMixin(QtWidgets.QMainWindow):
         def get_current_params():
             return self.confSpin_5.value(), self.loUSpinBox_5.value(), self.delaySpinBox_5.value()
 
-        self.worker = DetectionWorker(self.model, get_current_params, self.input_type, path)
+        # 设置临时目录用于保存检测结果
+        self.temp_output_dir = tempfile.mkdtemp(prefix="yolo_temp_result_")
+
+        self.worker = DetectionWorker(self.model, get_current_params, self.input_type, path,
+                                      save_dir=self.temp_output_dir,file_path=self.filePath)
         self.worker.frame_processed.connect(self.display_image)
         self.worker.result_updated.connect(lambda text: self.resultDisplay.setText(text))
         self.worker.fps_updated.connect(lambda fps: self.FPS.setText(f"FPS: {fps:.2f}"))
@@ -216,6 +260,7 @@ class LogicMixin(QtWidgets.QMainWindow):
 
         self.worker.start()
         self.detectBtn_5.setEnabled(False)
+        self.saveResultBtn.setEnabled(False)
         self.statusbar.showMessage("检测中...")
         self.is_paused = False
         self.detection_started = True
@@ -230,51 +275,79 @@ class LogicMixin(QtWidgets.QMainWindow):
             self.worker.pause()
             self.stopBtn.setIcon(QIcon("./Assets/Picture/resume.png"))
             self.statusbar.showMessage("检测已暂停")
+            self.worker.single_step_mode = True
         else:
             self.worker.resume()
             self.stopBtn.setIcon(QIcon("./Assets/Picture/stop.png"))
             self.statusbar.showMessage("检测继续")
+            self.worker.single_step_mode = False
 
     def on_worker_finished(self):
         self.detectBtn_5.setEnabled(True)
+        self.saveResultBtn.setEnabled(True)
         self.stopBtn.setIcon(QIcon("./Assets/Picture/stop.png"))
-        self.statusbar.showMessage("检测结束")
+        self.statusbar.showMessage("检测结束，您可以保存结果")
         self.worker = None
         self.is_paused = False
         self.detection_started = False
 
     def update_progress_slider(self, current, total):
         self.videoProgressSlider.setMaximum(total)
-        self.videoProgressSlider.setValue(current)
+        if not self.slider_is_dragging:
+            self.videoProgressSlider.setValue(current)
 
     def forward_video(self):
         if self.worker:
             self.worker.target_frame_index = self.worker.current_frame_index + 10
+            if self.is_paused:
+                self.worker.resume()
 
     def backward_video(self):
         if self.worker:
             self.worker.target_frame_index = max(0, self.worker.current_frame_index - 10)
+            if self.is_paused:
+                self.worker.resume()
+
+    def on_slider_pressed(self):
+        self.slider_is_dragging = True
 
     def slider_released(self):
+        self.slider_is_dragging = False
         if self.worker:
             self.worker.target_frame_index = self.videoProgressSlider.value()
-
+            if self.is_paused:
+                self.worker.resume()
     def closeEvent(self, event):
         if self.worker:
             self.worker.stop()
             self.worker.wait()
-        event.accept()
 
+        # 清理临时检测结果目录
+        if hasattr(self, 'temp_output_dir') and os.path.exists(self.temp_output_dir):
+            try:
+                shutil.rmtree(self.temp_output_dir)
+            except Exception as e:
+                print(f"清理临时目录失败: {e}")
+
+        event.accept()
+    def stop_current_worker_if_running(self):
+        if self.worker:
+            self.worker.stop()
+            self.worker.wait()
+            self.worker = None
+            self.is_paused = False
+            self.detection_started = False
+            self.statusbar.showMessage("已终止当前检测任务")
     def update_metric_display(self, model_name: str):
-        """根据模型名读取 mAP.txt 并更新到四个 QTextBrowser，仅显示冒号后的值"""
+        """根据模型名读取 mAP.txt 并更新到四个 QLabel，仅显示冒号后的值"""
         safe_name = model_name.replace(" ", "_")
         txt_path = os.path.join("Assets", "data", safe_name, "mAP.txt")
 
         if not os.path.exists(txt_path):
-            self.textBrowser_6.setPlainText("N/A")
-            self.textBrowser_7.setPlainText("N/A")
-            self.textBrowser_8.setPlainText("N/A")
-            self.textBrowser_9.setPlainText("N/A")
+            self.APLabel.setText("N/A")
+            self.APLabel2.setText("N/A")
+            self.APLabel3.setText("N/A")
+            self.APLabel4.setText("N/A")
             return
 
         try:
@@ -284,41 +357,53 @@ class LogicMixin(QtWidgets.QMainWindow):
             def extract_value(line):
                 return line.split(":", 1)[1].strip() if ":" in line else "N/A"
 
-            self.textBrowser_6.setPlainText(extract_value(lines[0]) if len(lines) > 0 else "N/A")
-            self.textBrowser_7.setPlainText(extract_value(lines[1]) if len(lines) > 1 else "N/A")
-            self.textBrowser_8.setPlainText(extract_value(lines[2]) if len(lines) > 2 else "N/A")
-            self.textBrowser_9.setPlainText(extract_value(lines[3]) if len(lines) > 3 else "N/A")
+            self.APLabel.setText(extract_value(lines[0]) if len(lines) > 0 else "N/A")
+            self.APLabel2.setText(extract_value(lines[1]) if len(lines) > 1 else "N/A")
+            self.APLabel3.setText(extract_value(lines[2]) if len(lines) > 2 else "N/A")
+            self.APLabel4.setText(extract_value(lines[3]) if len(lines) > 3 else "N/A")
 
-            self.update_result_list(model_name)
-
+            self.update_table_lists(model_name)
 
         except Exception as e:
-            self.textBrowser_6.setPlainText("读取错误")
-            self.textBrowser_7.setPlainText("读取错误")
-            self.textBrowser_8.setPlainText("读取错误")
-            self.textBrowser_9.setPlainText(str(e))
+            self.APLabel.setText("读取错误")
+            self.APLabel2.setText("读取错误")
+            self.APLabel3.setText("读取错误")
+            self.APLabel4.setText(str(e))
 
-
-    def update_result_list(self, model_name: str):
-        """读取模型目录中的 result.txt 文件，并更新 listWidget"""
+    def update_table_lists(self, model_name: str):
+        """
+        从 Assets/data/<model_name>/table_*.txt 读取内容并显示到六个 QListWidget 中
+        """
         safe_name = model_name.replace(" ", "_")
-        txt_path = os.path.join("Assets", "data", safe_name, "table.txt")
+        base_path = os.path.join("Assets", "data", safe_name)
 
-        self.listWidget.clear()
+        # 列表形式管理六个 listWidget 和文件名
+        file_names = [f"table_{i}.txt" for i in range(1, 7)]
+        list_widgets = [
+            self.classWidget,
+            self.imagesWidget,
+            self.instancesWidget,
+            self.percisionWiget,
+            self.recallWidget,
+            self.mAPWidget,
+        ]
 
-        if not os.path.exists(txt_path):
-            self.listWidget.addItem("table.txt 文件不存在")
-            self.listWidget.clear()
-            return
+        for i in range(6):
+            list_widget = list_widgets[i]
+            txt_path = os.path.join(base_path, file_names[i])
+            list_widget.clear()
 
-        try:
-            with open(txt_path, 'r', encoding='utf-8') as f:
-                lines = [line.strip() for line in f.readlines()]
-            for line in lines:
-                if line:  # 忽略空行
-                    self.listWidget.addItem(line)
-        except Exception as e:
-            self.listWidget.addItem(f"读取失败: {e}")
+            if not os.path.exists(txt_path):
+                list_widget.addItem("文件不存在")
+                continue
+
+            try:
+                with open(txt_path, "r", encoding="utf-8") as f:
+                    lines = [line.strip() for line in f.readlines()]
+                    for line in lines:
+                        list_widget.addItem(line if line else " ")
+            except Exception as e:
+                list_widget.addItem(f"读取失败: {str(e)}")
 
     def update_metric_image(self):
         model_name = self.modelCombo_5.currentText().replace(" ", "_")
@@ -344,9 +429,3 @@ class LogicMixin(QtWidgets.QMainWindow):
             self.label.setPixmap(pixmap)
 
         self.label.setAlignment(Qt.AlignCenter)
-
-
-
-
-
-
