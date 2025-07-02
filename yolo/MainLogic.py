@@ -1,28 +1,36 @@
 import os
 import cv2
 import PyQt5
+import tempfile
+import shutil
 from RunDetector import DetectionWorker
 from PyQt5 import uic, QtWidgets
-from PyQt5.QtWidgets import QMessageBox, QFileDialog, QDockWidget
-from PyQt5.QtGui import QImage, QPixmap, QIcon
+from PyQt5.QtWidgets import QMessageBox, QFileDialog, QListWidgetItem
+from PyQt5.QtGui import QImage, QPixmap, QIcon, QFont
 from PyQt5.QtCore import Qt
 from ultralytics import YOLO
+from CloudFile import FileManagerApp
+from Login import LoginWindow
 
 dirname = os.path.dirname(PyQt5.__file__)
 qt_dir = os.path.join(dirname, 'Qt5', 'plugins', 'platforms')
 os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = qt_dir
 
 class LogicMixin(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self, user_id=None):
         super().__init__()
         uic.loadUi("./Assets/UI/DetectorGUI.ui", self)
 
+        self.userId = user_id
+        self.login_window = None
+        self.file_window = None
         self.last_frame = None
         self.model = None
         self.file_path = None
         self.filePath = None
         self.input_type = None
         self.worker = None
+        self.save_output_dir = None
         self.is_paused = False
         self.detection_started = False
         self.slider_is_dragging = False
@@ -36,7 +44,12 @@ class LogicMixin(QtWidgets.QMainWindow):
         self.forwardBtn.clicked.connect(self.forward_video)
         self.backwardBtn.clicked.connect(self.backward_video)
         self.videoProgressSlider.sliderReleased.connect(self.slider_released)
+        self.saveResultBtn.clicked.connect(self.choose_save_directory)
+        self.modelCombo_5.currentTextChanged.connect(self.update_metric_display)
+        self.modelCombo_5.currentTextChanged.connect(self.update_metric_image)
+        self.comboBox_2.currentTextChanged.connect(self.update_metric_image)
 
+        self.saveResultBtn.setEnabled(False)
         self.detectBtn_5.setEnabled(False)
         self.stopBtn.setEnabled(True)  # 启动时就启用
 
@@ -58,10 +71,47 @@ class LogicMixin(QtWidgets.QMainWindow):
 
         self.delaySlider_5.setRange(0, 100)
         self.delaySlider_5.setValue(10)
-        self.delaySpinBox_5.setValue(0.1)
+        self.delaySpinBox_5.setValue(0.05)
         self.delaySlider_5.valueChanged.connect(lambda val: self.delaySpinBox_5.setValue(val / 100.0))
         self.delaySpinBox_5.valueChanged.connect(lambda val: self.delaySlider_5.setValue(int(val * 100)))
 
+        self.smallFontAction.triggered.connect(lambda: self.set_global_font_size(10))
+        self.mediumFontAction.triggered.connect(lambda: self.set_global_font_size(12))
+        self.largeFontAction.triggered.connect(lambda: self.set_global_font_size(16))
+        self.customFontAction.triggered.connect(self.set_custom_font_size)
+
+        self.settingDockAction.triggered.connect(self.toggle_setting_dock)
+        self.tabDockAction.triggered.connect(self.toggle_tab_dock)
+
+        self.fileAction.triggered.connect(self.toggle_file)
+
+        self.videoProgressSlider.hide()
+        self.stopBtn.hide()
+        self.forwardBtn.hide()
+        self.backwardBtn.hide()
+
+        self.create_dock_widget()
+
+    def applyFontToChildren(self, widget, font):
+        widget.setFont(font)
+        for child in widget.children():
+            if hasattr(child, 'setFont') and isinstance(child, QtWidgets.QWidget):
+                self.applyFontToChildren(child, font)
+
+    def set_global_font_size(self, size):
+        """设置全局字体大小"""
+        font = QFont("Arial", size)
+        self.applyFontToChildren(self, font)
+        self.statusbar.showMessage(f"字体大小已设置为 {size}pt")
+        self.base_font_size = size  # 如果你启用了 resizeEvent 中的自适应逻辑，可同步更新基准值
+
+    def set_custom_font_size(self):
+        """弹出对话框让用户自定义字体大小"""
+        size, ok = QtWidgets.QInputDialog.getInt(self, "自定义字体大小", "请输入字体大小（pt）", min=6, max=40)
+        if ok:
+            self.set_global_font_size(size)
+
+    def create_dock_widget(self):
         # --- 找到 UI 中原有控件 ---
         self.settingWidget = self.findChild(QtWidgets.QWidget, "settingWidget")
         self.tabWidget = self.findChild(QtWidgets.QTabWidget, "tabWidget")
@@ -95,45 +145,66 @@ class LogicMixin(QtWidgets.QMainWindow):
         self.resizeDocks([self.tabDock], [new_tab_width], Qt.Horizontal)
         self.resizeDocks([self.tabDock], [new_tab_height], Qt.Vertical)
 
-        # 添加显示/隐藏 dock 的动作
-        self.viewMenu.settingDockAction = self.settingDock.toggleViewAction()
-        self.viewMenu.tabDockAction = self.tabDock.toggleViewAction()
-
-        self.viewMenu.settingDockAction.setText("· 设置面板")
-        self.viewMenu.tabDockAction.setText("· 信息面板")
-
-        self.viewMenu.settingDockAction.triggered.connect(self.toggle_setting_dock)
-        self.viewMenu.tabDockAction.triggered.connect(self.toggle_tab_dock)
-
-        self.videoProgressSlider.hide()
-        self.stopBtn.hide()
-        self.forwardBtn.hide()
-        self.backwardBtn.hide()
+        self.settingDock.visibilityChanged.connect(
+            lambda visible: self.settingDockAction.setChecked(visible))
+        self.tabDock.visibilityChanged.connect(
+            lambda visible: self.tabDockAction.setChecked(visible))
 
     def toggle_setting_dock(self):
         if self.settingDock.isVisible():
             self.settingDock.hide()
-            self.toggleSettingAction.setText("  设置面板")
         else:
             self.settingDock.show()
-            self.toggleSettingAction.setText("· 设置面板")
 
     def toggle_tab_dock(self):
         if self.tabDock.isVisible():
             self.tabDock.hide()
-            self.toggleTabAction.setText("  信息面板")
         else:
             self.tabDock.show()
-            self.toggleTabAction.setText("· 信息面板")
+
+    def toggle_file(self):
+        if self.userId:
+            if self.file_window is None:
+                self.file_window = FileManagerApp(self.userId)
+                self.file_window.setWindowTitle("用户文件管理")
+            self.file_window.show()
+        else:
+            QMessageBox.warning(self, "提示", "请先登录！")
+            if self.login_window is None:
+                self.login_window = LoginWindow()
+                self.login_window.login_success.connect(self.on_login_success)
+            self.login_window.show()
+
+    def on_login_success(self, user_info):
+        QMessageBox.warning(self, "提示", "登录成功！")
+        self.login_window.deleteLater()
+        self.userId = user_info["user_id"]
 
     def load_model(self):
         try:
             model_name = "Assets/Model/" + self.modelCombo_5.currentText() + ".pt"
             self.model = YOLO(model_name)
             self.statusbar.showMessage(f"模型加载成功: {model_name}")
+            self.update_metric_display(self.modelCombo_5.currentText())
+
         except Exception as e:
             self.statusbar.showMessage(f"错误: {str(e)}")
             self.model = None
+
+    def choose_save_directory(self):
+        if not hasattr(self, 'temp_output_dir') or not os.path.exists(self.temp_output_dir):
+            QMessageBox.warning(self, "警告", "没有可保存的检测结果！")
+            return
+
+        directory = QFileDialog.getExistingDirectory(self, "选择保存目录")
+        if directory:
+            try:
+                # 复制临时目录中的内容到目标目录
+                shutil.copytree(self.temp_output_dir, directory, dirs_exist_ok=True)
+                self.statusbar.showMessage(f"检测结果已保存至：{directory}")
+            except Exception as e:
+                QMessageBox.critical(self, "保存失败", str(e))
+
 
     def select_file(self, input_type):
         try:
@@ -204,9 +275,20 @@ class LogicMixin(QtWidgets.QMainWindow):
         self.resizeDocks([self.settingDock], [new_setting_height], Qt.Vertical)
         self.resizeDocks([self.tabDock], [new_tab_width], Qt.Horizontal)
         self.resizeDocks([self.tabDock], [new_tab_height], Qt.Vertical)
+
         if self.last_frame is not None:
             self.display_image(self.last_frame)
 
+        # 窗口大小变化时重新调整指标图片
+        if hasattr(self, 'current_img_path'):
+            self.display_metric_image()
+
+    def applyFontToChildren(self, widget, font):
+        """递归地为所有子部件设置字体"""
+        widget.setFont(font)
+        for child in widget.children():
+            if hasattr(child, 'setFont'):
+                self.applyFontToChildren(child, font)
     def run_detection(self):
         if self.model is None:
             QMessageBox.warning(self, "警告", "请先加载模型！")
@@ -220,7 +302,11 @@ class LogicMixin(QtWidgets.QMainWindow):
         def get_current_params():
             return self.confSpin_5.value(), self.loUSpinBox_5.value(), self.delaySpinBox_5.value()
 
-        self.worker = DetectionWorker(self.model, get_current_params, self.input_type, path)
+        # 设置临时目录用于保存检测结果
+        self.temp_output_dir = tempfile.mkdtemp(prefix="yolo_temp_result_")
+
+        self.worker = DetectionWorker(self.model, get_current_params, self.input_type, path,
+                                      save_dir=self.temp_output_dir,file_path=self.filePath)
         self.worker.frame_processed.connect(self.display_image)
         self.worker.result_updated.connect(lambda text: self.resultDisplay.setText(text))
         self.worker.fps_updated.connect(lambda fps: self.FPS.setText(f"FPS: {fps:.2f}"))
@@ -229,6 +315,7 @@ class LogicMixin(QtWidgets.QMainWindow):
 
         self.worker.start()
         self.detectBtn_5.setEnabled(False)
+        self.saveResultBtn.setEnabled(False)
         self.statusbar.showMessage("检测中...")
         self.is_paused = False
         self.detection_started = True
@@ -252,8 +339,9 @@ class LogicMixin(QtWidgets.QMainWindow):
 
     def on_worker_finished(self):
         self.detectBtn_5.setEnabled(True)
+        self.saveResultBtn.setEnabled(True)
         self.stopBtn.setIcon(QIcon("./Assets/Picture/stop.png"))
-        self.statusbar.showMessage("检测结束")
+        self.statusbar.showMessage("检测结束，您可以保存结果")
         self.worker = None
         self.is_paused = False
         self.detection_started = False
@@ -288,6 +376,14 @@ class LogicMixin(QtWidgets.QMainWindow):
         if self.worker:
             self.worker.stop()
             self.worker.wait()
+
+        # 清理临时检测结果目录
+        if hasattr(self, 'temp_output_dir') and os.path.exists(self.temp_output_dir):
+            try:
+                shutil.rmtree(self.temp_output_dir)
+            except Exception as e:
+                print(f"清理临时目录失败: {e}")
+
         event.accept()
     def stop_current_worker_if_running(self):
         if self.worker:
@@ -297,3 +393,103 @@ class LogicMixin(QtWidgets.QMainWindow):
             self.is_paused = False
             self.detection_started = False
             self.statusbar.showMessage("已终止当前检测任务")
+    def update_metric_display(self, model_name: str):
+        """根据模型名读取 mAP.txt 并更新到四个 QLabel，仅显示冒号后的值"""
+        safe_name = model_name.replace(" ", "_")
+        txt_path = os.path.join("Assets", "data", safe_name, "mAP.txt")
+
+        if not os.path.exists(txt_path):
+            self.APLabel.setText("N/A")
+            self.APLabel2.setText("N/A")
+            self.APLabel3.setText("N/A")
+            self.APLabel4.setText("N/A")
+            return
+
+        try:
+            with open(txt_path, "r", encoding="utf-8") as f:
+                lines = [line.strip() for line in f.readlines()]
+
+            def extract_value(line):
+                return line.split(":", 1)[1].strip() if ":" in line else "N/A"
+
+            self.APLabel.setText(extract_value(lines[0]) if len(lines) > 0 else "N/A")
+            self.APLabel2.setText(extract_value(lines[1]) if len(lines) > 1 else "N/A")
+            self.APLabel3.setText(extract_value(lines[2]) if len(lines) > 2 else "N/A")
+            self.APLabel4.setText(extract_value(lines[3]) if len(lines) > 3 else "N/A")
+
+            self.update_table_lists(model_name)
+
+        except Exception as e:
+            self.APLabel.setText("读取错误")
+            self.APLabel2.setText("读取错误")
+            self.APLabel3.setText("读取错误")
+            self.APLabel4.setText(str(e))
+
+    def update_table_lists(self, model_name: str):
+        """
+        从 Assets/data/<model_name>/table_*.txt 读取内容并显示到六个 QListWidget 中
+        """
+        safe_name = model_name.replace(" ", "_")
+        base_path = os.path.join("Assets", "data", safe_name)
+
+        # 列表形式管理六个 listWidget 和文件名
+        file_names = [f"table_{i}.txt" for i in range(1, 7)]
+        list_widgets = [
+            self.classWidget,
+            self.imagesWidget,
+            self.instancesWidget,
+            self.percisionWiget,
+            self.recallWidget,
+            self.mAPWidget,
+        ]
+
+        for i in range(6):
+            list_widget = list_widgets[i]
+            txt_path = os.path.join(base_path, file_names[i])
+            list_widget.clear()
+
+            if not os.path.exists(txt_path):
+                list_widget.addItem("文件不存在")
+                continue
+
+            try:
+                with open(txt_path, "r", encoding="utf-8") as f:
+                    lines = [line.strip() for line in f.readlines()]
+                    for line in lines:
+                        item = QListWidgetItem(line if line else " ")
+                        list_widget.addItem(item)
+            except Exception as e:
+                list_widget.addItem(f"读取失败: {str(e)}")
+
+    def update_metric_image(self):
+        model_name = self.modelCombo_5.currentText().replace(" ", "_")
+        curve_name = self.comboBox_2.currentText().strip()
+        self.current_img_path = os.path.join("Assets", "diagram", model_name, f"{curve_name}.png")  # 存储当前图片路径
+
+        if not os.path.exists(self.current_img_path):
+            print("[警告] 路径不存在：", self.current_img_path)
+            self.label.clear()
+            self.label.setText("图像未找到")
+            return
+
+        self.display_metric_image()
+
+    def display_metric_image(self):
+        """显示或重新调整当前图片的大小"""
+        if not hasattr(self, 'current_img_path') or not os.path.exists(self.current_img_path):
+            return
+
+        pixmap = QPixmap(self.current_img_path)
+        if pixmap.isNull():
+            print("[错误] 加载图像失败：", self.current_img_path)
+            self.label.setText("图像加载失败")
+            return
+
+        # 调整图片大小以适应标签
+        scaled = pixmap.scaled(
+            self.label.size(),
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation
+        )
+        self.label.setPixmap(scaled)
+        self.label.setAlignment(Qt.AlignCenter)
