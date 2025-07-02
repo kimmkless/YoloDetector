@@ -1,0 +1,10 @@
+all
+angry
+contempt
+disgust
+fear
+happy
+natural
+sad
+sleepy
+surprised
